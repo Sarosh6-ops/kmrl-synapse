@@ -2,7 +2,7 @@
 
 import { FormEvent, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithPopup } from "firebase/auth";
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithPopup, signInWithRedirect, getRedirectResult } from "firebase/auth";
 import { auth, googleProvider, firebaseEnabled } from "@/lib/firebase";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -25,6 +25,24 @@ export default function LoginPage() {
       router.replace("/dashboard");
     }
   }, [authLoading, user, router]);
+
+  // Handle sign-in redirect result (fallback path for popup-blocked)
+  useEffect(() => {
+    if (!authLoading && firebaseEnabled && auth) {
+      getRedirectResult(auth)
+        .then((result) => {
+          if (result?.user) {
+            router.replace("/dashboard");
+          }
+        })
+        .catch((e: any) => {
+          // Ignore "no redirect" cases; only surface real errors
+          if (e?.code && !String(e.code).includes("no-auth-event")) {
+            setError(e?.message || "Google Sign-In failed");
+          }
+        });
+    }
+  }, [authLoading, router]);
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -54,10 +72,25 @@ export default function LoginPage() {
       if (!firebaseEnabled || !auth || !googleProvider) {
         throw new Error("Google Sign-In is not available. Firebase is not configured.");
       }
+      // Ensure account picker shows each time
+      if (typeof (googleProvider as any).setCustomParameters === "function") {
+        (googleProvider as any).setCustomParameters({ prompt: "select_account" });
+      }
+
       await signInWithPopup(auth, googleProvider);
       router.replace("/dashboard");
     } catch (err: any) {
-      setError(err?.message || "Google Sign-In failed");
+      // Fallback to redirect if popups are blocked
+      if (err?.code === "auth/popup-blocked") {
+        try {
+          await signInWithRedirect(auth!, googleProvider!);
+          return; // Navigation will happen after redirect
+        } catch (redirectErr: any) {
+          setError(redirectErr?.message || "Google Sign-In failed");
+        }
+      } else {
+        setError(err?.message || "Google Sign-In failed");
+      }
     } finally {
       setLoading(false);
     }
