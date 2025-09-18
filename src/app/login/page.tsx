@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithPopup } from "firebase/auth";
 import { auth, googleProvider, firebaseEnabled } from "@/lib/firebase";
@@ -9,14 +9,22 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { useAuth } from "@/components/auth/AuthProvider";
 
 export default function LoginPage() {
   const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!authLoading && user) {
+      router.replace("/dashboard");
+    }
+  }, [authLoading, user, router]);
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -85,11 +93,6 @@ export default function LoginPage() {
                   {error}
                 </div>
               )}
-              {!firebaseEnabled && (
-                <div className="text-xs text-amber-400 bg-amber-950/40 border border-amber-900/40 p-2 rounded">
-                  Authentication is temporarily unavailable because Firebase isn't configured. Please set NEXT_PUBLIC_FIREBASE_* environment variables.
-                </div>
-              )}
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
                 <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="you@kmrl.in" />
@@ -98,7 +101,7 @@ export default function LoginPage() {
                 <Label htmlFor="password">Password</Label>
                 <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required placeholder="••••••••" />
               </div>
-              <Button type="submit" className="w-full" disabled={loading || !firebaseEnabled}>
+              <Button type="submit" className="w-full" disabled={loading || authLoading}>
                 {loading ? "Please wait..." : mode === "signin" ? "Sign In" : "Create Account"}
               </Button>
             </form>
@@ -107,7 +110,7 @@ export default function LoginPage() {
               <span className="text-xs text-muted-foreground">or</span>
               <Separator className="flex-1" />
             </div>
-            <Button variant="secondary" className="w-full" onClick={onGoogle} disabled={loading || !firebaseEnabled}>
+            <Button variant="secondary" className="w-full" onClick={onGoogle} disabled={loading || authLoading}>
               Continue with Google
             </Button>
             <div className="mt-6 text-center text-sm text-muted-foreground">
